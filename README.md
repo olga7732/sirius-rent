@@ -4,7 +4,7 @@
 
 ### Запуск 
 # Клонирование
-git clone https://github.com/ваш-username/sirius-rent.git
+git clone https://github.com/olga7732/sirius-rent.git
 cd sirius-rent
 
 # Запуск через Docker 
