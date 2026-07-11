@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sirius.Аренда</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1> Sirius.Аренда</h1>
+        
+        <!-- Аутентификация -->
+        <div id="auth-section">
+            <h2>Вход</h2>
+            <input type="text" id="username" placeholder="Username">
+            <input type="password" id="password" placeholder="Password">
+            <button onclick="login()">Войти</button>
+            <button onclick="register()">Зарегистрироваться</button>
+            <button onclick="logout()" style="display:none" id="logout-btn">Выйти</button>
+            <div id="user-info"></div>
+        </div>
+
+        <hr>
+
+        <!-- Список комнат -->
+        <div id="rooms-section">
+            <h2>Доступные комнаты</h2>
+            <div id="rooms-list"></div>
+        </div>
+
+        <!-- Поиск свободных комнат -->
+        <div id="search-section">
+            <h2>Поиск свободных комнат</h2>
+            <input type="datetime-local" id="search-start">
+            <input type="datetime-local" id="search-end">
+            <input type="number" id="search-capacity" placeholder="Вместимость от">
+            <button onclick="searchRooms()">Найти</button>
+            <div id="search-results"></div>
+        </div>
+
+        <!-- Бронирование -->
+        <div id="booking-section">
+            <h2>Новое бронирование</h2>
+            <select id="booking-room"></select>
+            <input type="datetime-local" id="booking-start">
+            <input type="datetime-local" id="booking-end">
+            <button onclick="createBooking()">Забронировать</button>
+            <div id="booking-message"></div>
+        </div>
+
+        <!-- Просмотр расписания -->
+        <div id="schedule-section">
+            <h2>Расписание комнаты</h2>
+            <select id="schedule-room"></select>
+            <input type="date" id="schedule-date">
+            <button onclick="viewSchedule()">Показать</button>
+            <div id="schedule-results"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let token = localStorage.getItem('token');
+
+        // Автозагрузка
+        document.addEventListener('DOMContentLoaded', () => {
+            if (token) {
+                document.getElementById('user-info').textContent = '✅ Авторизован';
+                document.getElementById('logout-btn').style.display = 'inline-block';
+            }
+            loadRooms();
+            loadRoomSelects();
+        });
+
+        // === Аутентификация ===
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            const response = await fetch(`${API_URL}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            
+            const data = await response.json();
+            if (response.ok) {
+                localStorage.setItem('token', data.access_token);
+                token = data.access_token;
+                document.getElementById('user-info').textContent = '✅ Авторизован';
+                document.getElementById('logout-btn').style.display = 'inline-block';
+                alert('Вход выполнен!');
+            } else {
+                alert('Ошибка: ' + data.detail);
+            }
+        }
+
+        async function register() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            const response = await fetch(`${API_URL}/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            
+            if (response.ok) {
+                alert('Регистрация успешна! Теперь войдите.');
+            } else {
+                const data = await response.json();
+                alert('Ошибка: ' + data.detail);
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            token = null;
+            document.getElementById('user-info').textContent = '❌ Не авторизован';
+            document.getElementById('logout-btn').style.display = 'none';
+        }
+
+        // === Загрузка комнат ===
+        async function loadRooms() {
+            const response = await fetch(`${API_URL}/rooms`);
+            const rooms = await response.json();
+            
+            const list = document.getElementById('rooms-list');
+            list.innerHTML = rooms.map(room => `
+                <div class="room-card">
+                    <h3>${room.name}</h3>
+                    <p> Вместимость: ${room.capacity} чел.</p>
+                    <p> Оборудование: ${room.equipment.join(', ') || 'нет'}</p>
+                </div>
+            `).join('');
+        }
+
+        async function loadRoomSelects() {
+            const response = await fetch(`${API_URL}/rooms`);
+            const rooms = await response.json();
+            
+            const selects = ['booking-room', 'schedule-room'];
+            selects.forEach(id => {
+                const select = document.getElementById(id);
+                select.innerHTML = rooms.map(room => 
+                    `<option value="${room.id}">${room.name}</option>`
+                ).join('');
+            });
+        }
+
+        // === Поиск свободных комнат ===
+        async function searchRooms() {
+            const start = document.getElementById('search-start').value;
+            const end = document.getElementById('search-end').value;
+            const capacity = document.getElementById('search-capacity').value;
+            
+            if (!start || !end) {
+                alert('Укажите время начала и окончания');
+                return;
+            }
+
+            let url = `${API_URL}/rooms/available?start=${start}&end=${end}`;
+            if (capacity) url += `&capacity=${capacity}`;
+
+            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+            const response = await fetch(url, { headers });
+            const rooms = await response.json();
+            
+            const results = document.getElementById('search-results');
+            if (rooms.length === 0) {
+                results.innerHTML = '<p>😕 Свободных комнат нет</p>';
+            } else {
+                results.innerHTML = rooms.map(room => `
+                    <div class="room-card">
+                        <h4>${room.name}</h4>
+                        <p> ${room.capacity} чел. | 📋 ${room.equipment.join(', ')}</p>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // === Создание бронирования ===
+        async function createBooking() {
+            if (!token) {
+                alert('Войдите, чтобы бронировать');
+                return;
+            }
+
+            const room_id = document.getElementById('booking-room').value;
+            const start = document.getElementById('booking-start').value;
+            const end = document.getElementById('booking-end').value;
+
+            if (!start || !end) {
+                alert('Укажите время');
+                return;
+            }
+
+            const response = await fetch(`${API_URL}/bookings`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ room_id: parseInt(room_id), start_time: start, end_time: end })
+            });
+
+            const data = await response.json();
+            const msg = document.getElementById('booking-message');
+            if (response.ok) {
+                msg.innerHTML = '✅ Бронирование создано!';
+                msg.style.color = 'green';
+            } else {
+                msg.innerHTML = '❌ ' + (data.detail || 'Ошибка');
+                msg.style.color = 'red';
+            }
+        }
+
+        // === Просмотр расписания ===
+        async function viewSchedule() {
+            const room_id = document.getElementById('schedule-room').value;
+            const date = document.getElementById('schedule-date').value;
+
+            if (!date) {
+                alert('Укажите дату');
+                return;
+            }
+
+            const response = await fetch(`${API_URL}/bookings/rooms/${room_id}/bookings?date=${date}`);
+            const bookings = await response.json();
+            
+            const results = document.getElementById('schedule-results');
+            if (bookings.length === 0) {
+                results.innerHTML = '<p> Нет бронирований</p>';
+            } else {
+                results.innerHTML = bookings.map(b => `
+                    <div class="booking-item">
+                        <strong>${new Date(b.start_time).toLocaleTimeString()} - ${new Date(b.end_time).toLocaleTimeString()}</strong>
+                        <span>Пользователь: ${b.user_id}</span>
+                    </div>
+                `).join('');
+            }
+        }
+    </script>
+</body>
+</html>
