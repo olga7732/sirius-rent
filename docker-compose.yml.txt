@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./data/app.db
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-me}
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+    volumes:
+      - ./data:/app/data
+      - ./app:/app/app
+    restart: unless-stopped
+
+  # Для продакшена можно добавить PostgreSQL:
+  # db:
+  #   image: postgres:15
+  #   environment:
+  #     POSTGRES_USER: sirius
+  #     POSTGRES_PASSWORD: sirius123
+  #     POSTGRES_DB: sirius_rent
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
